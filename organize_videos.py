@@ -14,7 +14,23 @@ def extract_show_name(filename):
             break
         show_name_parts.append(part)
     
-    return '.'.join(show_name_parts)
+    return ' '.join(show_name_parts)
+
+def has_video_files_in_tree(directory):
+    # Check if directory or any of its subdirectories have video files
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.lower().endswith(('.mp4', '.mkv', '.avi', '.mov')):
+                return True
+    return False
+
+def has_video_files(directory):
+    # Check if directory has any video files directly in it (not in subdirectories)
+    for file in os.listdir(directory):
+        file_path = os.path.join(directory, file)
+        if os.path.isfile(file_path) and file.lower().endswith(('.mp4', '.mkv', '.avi', '.mov')):
+            return True
+    return False
 
 def organize_videos(root_dir, ignore_folder=None, cleanup=False):
     # Get all files recursively
@@ -49,17 +65,29 @@ def organize_videos(root_dir, ignore_folder=None, cleanup=False):
                 except Exception as e:
                     print(f"Error processing {file}: {str(e)}")
     
-    # Cleanup empty subdirectories if requested
+    # Cleanup subdirectories if requested
     if cleanup:
-        print("\nCleaning up empty subdirectories...")
-        for root, dirs, files in os.walk(root_dir, topdown=False):
+        print("\nCleaning up subdirectories...")
+        # First identify all directories that should be preserved (have videos in their tree)
+        preserve_dirs = set()
+        for root, dirs, _ in os.walk(root_dir, topdown=False):
+            for dir_name in dirs:
+                dir_path = os.path.join(root, dir_name)
+                if has_video_files_in_tree(dir_path):
+                    # Add this directory and all its parents to preserve list
+                    current = dir_path
+                    while current != root_dir:
+                        preserve_dirs.add(current)
+                        current = os.path.dirname(current)
+        
+        # Now remove directories that aren't in the preserve list
+        for root, dirs, _ in os.walk(root_dir, topdown=False):
             for dir_name in dirs:
                 dir_path = os.path.join(root, dir_name)
                 try:
-                    # Check if directory is empty (no files and no subdirectories)
-                    if not os.listdir(dir_path):
-                        print(f"Removing empty directory: {dir_path}")
-                        os.rmdir(dir_path)
+                    if dir_path not in preserve_dirs and dir_path != root_dir:
+                        print(f"Removing directory with no video files in tree: {dir_path}")
+                        shutil.rmtree(dir_path)
                 except Exception as e:
                     print(f"Error removing directory {dir_path}: {str(e)}")
 
