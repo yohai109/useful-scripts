@@ -61,6 +61,7 @@ def has_video_files(directory):
 def organize_videos(root_dir, ignore_folder=None, cleanup=False, remove_duplicates=False):
     # Dictionary to store episode information
     episodes = {}
+    unmatched_files = []
     
     # First pass: collect all video files and their information
     for root, dirs, files in os.walk(root_dir):
@@ -74,6 +75,9 @@ def organize_videos(root_dir, ignore_folder=None, cleanup=False, remove_duplicat
                 try:
                     show_name, season, episode = extract_episode_info(file)
                     if not show_name or season is None or episode is None:
+                        # Store unmatched files to move them to root later
+                        if os.path.dirname(os.path.join(root, file)) != root_dir:
+                            unmatched_files.append(os.path.join(root, file))
                         continue
                     
                     # Create a unique key for this episode
@@ -92,6 +96,26 @@ def organize_videos(root_dir, ignore_folder=None, cleanup=False, remove_duplicat
                     
                 except Exception as e:
                     print(f"Error processing {file}: {str(e)}")
+                    # Add files that caused errors to unmatched files
+                    if os.path.dirname(os.path.join(root, file)) != root_dir:
+                        unmatched_files.append(os.path.join(root, file))
+    
+    # Move unmatched files to root directory
+    for file_path in unmatched_files:
+        try:
+            filename = os.path.basename(file_path)
+            dest_path = os.path.join(root_dir, filename)
+            print(f"Moving unmatched file {filename} to root directory")
+            if os.path.exists(dest_path):
+                base, ext = os.path.splitext(filename)
+                counter = 1
+                while os.path.exists(dest_path):
+                    new_filename = f"{base}_{counter}{ext}"
+                    dest_path = os.path.join(root_dir, new_filename)
+                    counter += 1
+            shutil.move(file_path, dest_path)
+        except Exception as e:
+            print(f"Error moving unmatched file {file_path}: {str(e)}")
     
     # Second pass: handle duplicates and move files
     for (show_name, season, episode), file_list in episodes.items():
